@@ -1,16 +1,19 @@
 import telebot
+from google import genai
 import os
-import difflib
 from flask import Flask, request
 
-# 1. Зчитуємо токен Telegram з налаштувань Render
+# 1. Безпечно зчитуємо токен Telegram та свіжий ключ Gemini з налаштувань Render
 tg_token = os.environ.get('TELEGRAM_TOKEN')
+google_key = os.environ.get('GEMINI_API_KEY')
 RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
 
+# 2. Ініціалізуємо офіційних хмарних клієнтів
 bot = telebot.TeleBot(tg_token)
+ai_client = genai.Client(api_key=google_key)
 app = Flask(__name__)
 
-print(f"🚀 Запускаємо автономного інтелектуального бота на {RENDER_EXTERNAL_URL}")
+print(f"🚀 Запускаємо розумного автономного ШІ-бота на {RENDER_EXTERNAL_URL}")
 
 @app.route('/' + tg_token, methods=['POST'])
 def getMessage():
@@ -21,51 +24,33 @@ def getMessage():
 
 @app.route("/")
 def webhook_index():
-    return "Бот працює на 100% автономно!", 200
-
-# Розширена інтелектуальна база знань прямо всередині пам'яті сервера
-knowledge_base = {
-    "привіт": "Привіт! Я твій повністю автономний ШІ-асистент на Render. Готовий відповідати 24/7! 👋",
-    "хто ти": "Я твій хмарний чат-бот, створений на Python. Я вмію працювати цілодобово, навіть коли твій ноутбук вимкнений! 🤖",
-    "як справи": "Мої віртуальні системи працюють ідеально! Процесор не перегрівається і готовий до роботи. 💻",
-    "шевченко": "Тарас Григорович Шевченко — великий український поет, видатний художник та національний пророк. Автор знаменитої збірки віршів 'Кобзар', яка стала символом української культури та незалежності. 🇺🇦",
-    "столиця україни": "Столицею України є незламне місто-герой Київ! Це одне з найдавніших та найкрасивіших міст Європи, розташоване на річці Дніпро. 🏛️",
-    "дякую": "Завжди радий допомогти! Навчатися програмуванню та створювати власні хмарні проекти разом — це круто! 😊",
-    "максим сайбеков": "Максим Сайбеков — талановитий український розробник-початківець, який успішно пройшов квест розгортання клієнт-серверного ШІ-додатка у хмарі Render! 🏆"
-}
+    return "Бот працює і думає мізками Gemini 1.5!", 200
 
 @bot.message_handler(content_types=['text'])
 def handle_message(message):
-    user_prompt = message.text.lower().strip()
+    user_prompt = message.text
     print("Отримано запит в Telegram: " + user_prompt)
     
-    if user_prompt == "/start":
-        bot.reply_to(message, "👋 Привіт! Я твій повністю автономний ШІ-бот. Я працюю у хмарі 24/7, навіть коли твій ноутбук вимкнений! Запитай мене про що завгодно (наприклад: 'Хто такий Шевченко?' або 'Яка столиця України?').")
+    if user_prompt.lower().strip() == "/start":
+        bot.reply_to(message, "👋 Привіт! Я твій офіційний автономний ШІ-бот на базі Google Gemini 1.5. Я знаю геть усе на світі! Запитай мене про що завгодно українською мовою!")
         return
 
-    # Розумний пошук найближчого за змістом запитання в нашій базі знань
-    keys = list(knowledge_base.keys())
-    
-    # Шукаємо збіги за допомогою алгоритму difflib (знаходить слова, навіть якщо дописані цифри на кшталт 15:44)
-    matches = difflib.get_close_matches(user_prompt, keys, n=1, cutoff=0.3)
-    
-    # Також перевіряємо, чи є ключове слово просто частиною довгого речення
-    partial_match = None
-    for key in keys:
-        if key in user_prompt:
-            partial_match = key
-            break
-
-    if matches:
-        matched_key = matches[0]
-        bot.reply_to(message, knowledge_base[matched_key])
-        print(f"Інтелектуальна відповідь знайдена для ключа: {matched_key}")
-    elif partial_match:
-        bot.reply_to(message, knowledge_base[partial_match])
-        print(f"Частковий збіг знайдено для ключа: {partial_match}")
-    else:
-        # Універсальна відповідь, яка підставляє текст користувача, якщо тема абсолютно нова
-        bot.reply_to(message, f"🤖 Я почув твій запит: '{message.text}'. Мій хмарний сервер на Render працює бездоганно. Зараз я розширюю свою локальну базу знань. Задай мені питання про Шевченка, Київ або Максима Сайбекова!")
+    try:
+        # Викликаємо суперстабільну модель Gemini 1.5 Flash з великими безкоштовними лімітами
+        response = ai_client.models.generate_content(
+            model='gemini-1.5-flash', 
+            contents=f"Ти дружній та дуже розумний асистент. Дай відповідь обов'язково українською мовою, коротко і лаконічно: {user_prompt}",
+        )
+        
+        if response.text:
+            bot.reply_to(message, response.text)
+            print("Gemini успішно надіслав ШІ-відповідь!")
+        else:
+            bot.reply_to(message, "Я трохи замислився, спробуй перефразувати питання!")
+            
+    except Exception as e:
+        print("Помилка Gemini API: ", e)
+        bot.reply_to(message, "🤖 Мої віртуальні мізки зараз перевантажені. Напиши мені це повідомлення ще раз прямо зараз!")
 
 if __name__ == "__main__":
     bot.remove_webhook()
