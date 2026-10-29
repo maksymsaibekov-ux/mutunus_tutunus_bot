@@ -1,18 +1,19 @@
 import telebot
+from google import genai
 import os
-import urllib.request
-import json
-import urllib.parse
 from flask import Flask, request
 
-# 1. Зчитуємо токен Telegram з налаштувань Render
+# 1. Считываем ключи из настроек Render
 tg_token = os.environ.get('TELEGRAM_TOKEN')
+google_key = os.environ.get('GEMINI_API_KEY')
 RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
 
+# 2. Инициализируем официальных клиентов
 bot = telebot.TeleBot(tg_token)
+ai_client = genai.Client(api_key=google_key)
 app = Flask(__name__)
 
-print(f"🚀 Запускаємо розумного автономного бота на {RENDER_EXTERNAL_URL}")
+print(f"🚀 Запускаем умного официального бота на {RENDER_EXTERNAL_URL}")
 
 @app.route('/' + tg_token, methods=['POST'])
 def getMessage():
@@ -23,7 +24,7 @@ def getMessage():
 
 @app.route("/")
 def webhook_index():
-    return "Бот працює і думає!", 200
+    return "Бот работает стабильно с Gemini 1.5!", 200
 
 @bot.message_handler(content_types=['text'])
 def handle_message(message):
@@ -31,32 +32,25 @@ def handle_message(message):
     print("Отримано запит в Telegram: " + user_prompt)
     
     if user_prompt.lower().strip() == "/start":
-        bot.reply_to(message, "👋 Привіт! Я твій всезнаючий автономний ШІ-бот. Запитай мене про що завгодно на світі українською мовою!")
+        bot.reply_to(message, "👋 Привіт! Я твій офіційний всезнаючий ШІ-бот на базі Google Gemini 1.5. Запитай мене про що завгодно українською мовою!")
         return
 
     try:
-        # Підключаємося до відкритого стабільного ШІ-шлюзу
-        encoded_prompt = urllib.parse.quote(user_prompt)
-        api_url = f"https://googleapis.com{encoded_prompt}"
+        # Используем суперстабильную модель Gemini 1.5 Flash с огромными лимитами
+        response = ai_client.models.generate_content(
+            model='gemini-1.5-flash', 
+            contents=f"Ти дружній та дуже розумний асистент. Дай відповідь обов'язково українською мовою: {user_prompt}",
+        )
         
-        # Використовуємо універсальний публічний ШІ-конектор, який відповідає на будь-які теми
-        ai_service_url = f"https://open-api.bot{encoded_prompt}&lang=uk"
-        req = urllib.request.Request(ai_service_url, headers={'User-Agent': 'Mozilla/5.0'})
-        
-        with urllib.request.urlopen(req) as response:
-            data = json.loads(response.read().decode())
-            ai_answer = data.get("response")
-            
-        if ai_answer and "мізки" not in ai_answer.lower():
-            bot.reply_to(message, ai_answer)
-            print("ШІ успішно відповів на складне питання!")
+        if response.text:
+            bot.reply_to(message, response.text)
+            print("Gemini успешно ответил!")
         else:
-            # Запасний варіант, якщо сервер open-api на секунду замислився
-            bot.reply_to(message, f"🤖 Я отримав твій запит: '{user_prompt}'. Мій хмарний сервер працює, але ШІ-мережа завантажена. Спробуй перефразувати запит!")
+            bot.reply_to(message, "ШІ задумався. Спробуй ще раз!")
             
     except Exception as e:
-        print("Помилка підключення до ШІ: ", e)
-        bot.reply_to(message, "🤖 Ой, хмарна нейромережа зараз оновлюється. Напиши мені ще раз за секунду!")
+        print("Помилка Gemini API: ", e)
+        bot.reply_to(message, "🤖 Ой, хмарна нейромережа зараз оновлюється. Напиши мені це повідомлення ще раз прямо зараз!")
 
 if __name__ == "__main__":
     bot.remove_webhook()
