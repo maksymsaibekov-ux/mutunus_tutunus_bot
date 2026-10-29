@@ -14,7 +14,7 @@ def ask_ai(text):
         "https://api.groq.com/openai/v1/chat/completions",
         headers={"Authorization": f"Bearer {GROQ_KEY}"},
         json={
-            "model": "llama-3.3-70b-versatile",
+            "model": "openai/gpt-oss-20b",
             "messages": [
                 {"role": "system", "content": "Ти корисний помічник. Відповідай українською."},
                 {"role": "user", "content": text},
