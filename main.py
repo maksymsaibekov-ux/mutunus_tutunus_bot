@@ -1,15 +1,16 @@
 import telebot
+from huggingface_hub import InferenceClient
 import os
-import urllib.request
-import json
-import urllib.parse
 from flask import Flask, request
 
-# 1. Зчитуємо токен Telegram з налаштувань Render
+# 1. Зчитуємо ключі з налаштувань Render
 tg_token = os.environ.get('TELEGRAM_TOKEN')
+hf_token = os.environ.get('HF_TOKEN')
 RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
 
+# 2. Ініціалізуємо офіційних клієнтів
 bot = telebot.TeleBot(tg_token)
+client = InferenceClient(api_key=hf_token)
 app = Flask(__name__)
 
 print(f"🚀 Запускаємо бота в режимі Webhook на {RENDER_EXTERNAL_URL}")
@@ -31,24 +32,27 @@ def handle_message(message):
     print("Отримано запит в Telegram: " + user_prompt)
     
     if user_prompt == "/start":
-        bot.reply_to(message, "👋 Привіт! Я твій повністю автономний ШІ-бот. Задай мені будь-яке питання українською мовою!")
+        bot.reply_to(message, "👋 Привіт! Я твій особистий автономний ШІ-бот. Задай мені будь-яке питання українською мовою!")
         return
 
     try:
-        # Використовуємо стабільний безкоштовний ШІ-сервер без ключів доступу
-        api_url = f"https://open-api.bot{urllib.parse.quote(user_prompt)}&lang=uk"
-        req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
+        # Використовуємо суперстабільну модель від Microsoft
+        response = client.chat.completions.create(
+            model="microsoft/Phi-3-mini-4k-instruct",
+            messages=[
+                {"role": "system", "content": "Ти дружній асистент. Обов'язково відповідай коротко і виключно українською мовою."},
+                {"role": "user", "content": user_prompt}
+            ],
+            max_tokens=300
+        )
         
-        with urllib.request.urlopen(req) as response:
-            data = json.loads(response.read().decode())
-            ai_answer = data.get("response", "Я трохи замислився, спробуй ще раз!")
-            
+        ai_answer = response.choices.message.content
         bot.reply_to(message, ai_answer)
-        print("ШІ успішно відповів!")
+        print("ШІ успішно відповів солов'їною!")
         
     except Exception as e:
-        print("Помилка підключення до ШІ: ", e)
-        bot.reply_to(message, "🤖 Мої віртуальні мізки зараз відпочивають. Напиши мені ще раз прямо зараз!")
+        print("Помилка сервера ШІ: ", e)
+        bot.reply_to(message, "🤖 Мої віртуальні мізки трохи задумалися. Напиши мені це повідомлення ще раз прямо зараз!")
 
 if __name__ == "__main__":
     bot.remove_webhook()
