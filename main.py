@@ -4,14 +4,15 @@ import os
 import threading
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 
-# 1. Считываем безкоштовний ключ ШІ з налаштувань сервера Render
+# 1. Зчитуємо ключі безпечно з налаштувань сервера Render
+tg_token = os.environ.get('TELEGRAM_TOKEN')
 hf_token = os.environ.get('HF_TOKEN')
 
-# 2. Налаштовуємо клієнтів (Вставте ваш НОВИЙ токен Telegram всередину лапок)
-bot = telebot.TeleBot("9132142154:AAFMLBpZ6HUm7qSUB8L3Qw1Q4oUZwOntNqI")
+# 2. Налаштовуємо клієнтів
+bot = telebot.TeleBot(tg_token)
 client = InferenceClient(api_key=hf_token)
 
-print("🚀 Стабільний автономний ШІ-бот успішно запущений на Render!")
+print("🚀 Чистий автономний ШІ-бот успішно запущений на Render!")
 
 @bot.message_handler(content_types=['text'])
 def handle_message(message):
@@ -23,7 +24,7 @@ def handle_message(message):
         return
 
     try:
-        # Використовуємо стабільну відкриту модель Qwen 2.5
+        # Використовуємо стабільну відкриту модель Llama 3.2
         response = client.chat.completions.create(
             model="meta-llama/Llama-3.2-3B-Instruct",
             messages=[
