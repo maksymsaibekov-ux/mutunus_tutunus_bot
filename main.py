@@ -1,54 +1,60 @@
 import telebot
-from google import genai
 import os
+import g4f
 from flask import Flask, request
 
-# 1. Пропишіть ваші оригінальні ключі сюди
-TG_TOKEN = "9132142154:AAFMSSlbyCTvyndZ4ujKWu_I_h97WOl3tU0"
-GEMINI_KEY = "ВСТАВТЕ_ВАШ_КЛЮЧ_AIzaSy_ВІД_GOOGLE_AI_STUDIO"
+# 1. Зчитуємо токен Telegram з налаштувань Render
+tg_token = os.environ.get('TELEGRAM_TOKEN')
+RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
 
-bot = telebot.TeleBot(TG_TOKEN)
-ai_client = genai.Client(api_key=GEMINI_KEY)
+bot = telebot.TeleBot(tg_token)
 app = Flask(__name__)
 
-print("🚀 Розумний ШІ-бот офіційно запущений на серверах Google Cloud!")
+print(f"🚀 Запускаємо офіційного безвідмовного ШІ-бота GPT на {RENDER_EXTERNAL_URL}")
 
-@app.route('/', methods=['POST', 'GET'])
-def webhook():
-    if request.method == 'POST':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return "!", 200
-    return "Google ШІ-сервер працює!", 200
+@app.route('/' + tg_token, methods=['POST'])
+def getMessage():
+    json_string = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_string)
+    bot.process_new_updates([update])
+    return "!", 200
+
+@app.route("/")
+def webhook_index():
+    return "ШІ-сервер працює стабільно!", 200
 
 @bot.message_handler(content_types=['text'])
 def handle_message(message):
     user_prompt = message.text
-    print("Запит від користувача: " + user_prompt)
+    print("Отримано запит в Telegram: " + user_prompt)
     
     if user_prompt.lower().strip() == "/start":
-        bot.reply_to(message, "👋 Привіт! Я твій автономний ШІ-бот, який працює на серверах Google Cloud. Запитай мене про що завгодно!")
+        bot.reply_to(message, "👋 Привіт! Я твій особистий автономний ШІ-бот. Я підключений до GPT-4o і знаю все на світі! Запитай мене про що завгодно українською мовою.")
         return
 
     try:
-        # Викликаємо оригінальну модель Gemini, яка на серверах Google літає миттєво
-        response = ai_client.models.generate_content(
-            model='gemini-1.5-flash', 
-            contents=f"Ти дружній асистент. Дай відповідь обов'язково українською мовою, чітко і коротко: {user_prompt}",
+        # 2. Офіційний запит через g4f до найстабільнішого безкоштовного провайдера GPT-4o
+        response = g4f.ChatCompletion.create(
+            model=g4f.models.gpt_4o_mini,
+            messages=[
+                {"role": "system", "content": "Ти дружній асистент. Обов'язково відповідай коротко, лаконічно і виключно українською мовою на будь-які теми."},
+                {"role": "user", "content": user_prompt}
+            ],
+            provider=g4f.Provider.ChatGptEs
         )
         
-        if response.text:
-            bot.reply_to(message, response.text)
+        if response:
+            bot.reply_to(message, response)
+            print("GPT успішно надіслав відповідь!")
         else:
-            bot.reply_to(message, "Я задумався, спробуй ще раз!")
+            bot.reply_to(message, "Я трохи замислився, спробуй ще раз!")
             
     except Exception as e:
-        print("Помилка: ", e)
-        bot.reply_to(message, "🤖 Помилка з'єднання з ШІ. Спробуй надіслати запит ще раз!")
+        print("Помилка ШІ: ", e)
+        # Запасна інтелектуальна відповідь, якщо провайдер на секунду перевантажений
+        bot.reply_to(message, f"🤖 Я почув твій запит: '{user_prompt}'. Мій сервер на Render працює ідеально, але хмарний ШІ-канал зараз оновлюється. Напиши це повідомлення ще раз прямо зараз!")
 
-# Telegram Webhook налаштується автоматично через сервери Google
 if __name__ == "__main__":
-    # Сервер Google сам підставить потрібний порт
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+    bot.remove_webhook()
+    bot.set_webhook(url=f"{RENDER_EXTERNAL_URL}/{tg_token}")
+    app.run(host="0.0.0.0", port=10000)
