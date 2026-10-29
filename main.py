@@ -25,7 +25,7 @@ def handle_message(message):
     try:
         # Викликаємо безкоштовну і відкриту модель Llama 3
         response = ai_client.chat.completions.create(
-            model="meta-llama-3.1-405b",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "Ти дружній асистент. Обов'язково відповідай коротко і виключно українською мовою."},
                 {"role": "user", "content": user_prompt}
