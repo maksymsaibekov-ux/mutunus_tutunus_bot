@@ -45,7 +45,7 @@ def webhook():
     if msg and "text" in msg:
         try:
             answer = ask_ai(msg["text"])
-                except Exception as e:
+        except Exception as e:
             print("AI error:", e, flush=True)
             answer = f"Помилка: {e}"
         requests.post(
