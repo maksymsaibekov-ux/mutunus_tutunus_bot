@@ -4,15 +4,15 @@ import urllib.request
 import json
 from flask import Flask, request
 
-# 1. Зчитуємо токен Telegram та ключ Mistral з налаштувань Render
+# 1. Безпечно зчитуємо токен Telegram та безкоштовний ключ Groq ШІ
 tg_token = os.environ.get('TELEGRAM_TOKEN')
-mistral_key = os.environ.get('MISTRAL_API_KEY')
+groq_key = os.environ.get('GROQ_API_KEY')
 RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
 
 bot = telebot.TeleBot(tg_token)
 app = Flask(__name__)
 
-print(f"🚀 Запускаємо справжнього ШІ-бота Mistral на {RENDER_EXTERNAL_URL}")
+print(f"🚀 Запускаємо офіційного ШІ-бота Groq на {RENDER_EXTERNAL_URL}")
 
 @app.route('/' + tg_token, methods=['POST'])
 def getMessage():
@@ -23,7 +23,7 @@ def getMessage():
 
 @app.route("/")
 def webhook_index():
-    return "ШІ-сервер працює стабільно!", 200
+    return "Надшвидкий ШІ-сервер працює!", 200
 
 @bot.message_handler(content_types=['text'])
 def handle_message(message):
@@ -31,36 +31,37 @@ def handle_message(message):
     print("Отримано запит в Telegram: " + user_prompt)
     
     if user_prompt.lower().strip() == "/start":
-        bot.reply_to(message, "👋 Привіт! Я твій всезнаючий автономний ШІ-бот. Запитай мене про що завгодно українською мовою!")
+        bot.reply_to(message, "👋 Привіт! Я твій офіційний автономний ШІ-бот на базі моделі Llama 3.1 від Groq. Я знаю абсолютно все на світі! Запитай мене про що завгодно українською мовою!")
         return
 
     try:
-        # 2. Офіційний прямий HTTP-запит до легального API Mistral AI
-        url = "https://mistral.ai"
+        # 2. Прямий швидкий HTTP-запит до офіційного безкоштовного API Groq
+        url = "https://groq.com"
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {mistral_key}"
+            "Authorization": f"Bearer {groq_key}"
         }
         data = {
-            "model": "mistral-small-latest",
+            "model": "llama-3.1-8b-instant",
             "messages": [
-                {"role": "system", "content": "Ти дружній та дуже розумний асистент. Обов'язково відповідай виключно українською мовою, коротко і чітко."},
+                {"role": "system", "content": "Ти дружній та дуже розумний асистент. Обов'язково відповідай виключно українською мовою, коротко і чітко на будь-які запитання користувача."},
                 {"role": "user", "content": user_prompt}
-            ]
+            ],
+            "temperature": 0.7
         }
         
         req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers=headers)
         
-        with urllib.request.urlopen(req, timeout=20) as response:
+        with urllib.request.urlopen(req, timeout=15) as response:
             result = json.loads(response.read().decode('utf-8'))
             ai_answer = result['choices'][0]['message']['content']
             
         bot.reply_to(message, ai_answer)
-        print("ШІ успішно надіслав справжню відповідь!")
+        print("Groq ШІ успішно надіслав відповідь користувачу!")
         
     except Exception as e:
-        print("Помилка ШІ: ", e)
-        bot.reply_to(message, "🤖 Мережа ШІ на секунду перервалася. Напиши мені це повідомлення ще раз прямо зараз!")
+        print("Помилка Groq API: ", e)
+        bot.reply_to(message, "🤖 Мої віртуальні мізки зараз обробляють занадто багато інформації. Надішли це повідомлення ще раз через 5 секунд!")
 
 if __name__ == "__main__":
     bot.remove_webhook()
