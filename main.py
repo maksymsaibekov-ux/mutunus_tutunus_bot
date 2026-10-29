@@ -4,7 +4,7 @@ import threading
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 
 # 1. Налаштовуємо ваш токен Telegram
-bot = telebot.TeleBot("9132142154:AAGqeXNGT51i_ouCpK2Vtk8NCF5THY_ONRQ")
+bot = telebot.TeleBot("9132142154:AAFTPiSnZuS_TY0NOXi8CkEqj5283lPu22Y")
 ai_client = Client()
 
 print("🚀 Фінальний автономний ШІ-бот успішно запущений на Render!")
