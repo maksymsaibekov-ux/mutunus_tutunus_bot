@@ -1,7 +1,6 @@
 import telebot
 import os
 import urllib.request
-import json
 import urllib.parse
 from flask import Flask, request
 
@@ -11,7 +10,7 @@ RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
 bot = telebot.TeleBot(tg_token)
 app = Flask(__name__)
 
-print(f"🚀 Запускаем умного энциклопедического Бот-ШИ на {RENDER_EXTERNAL_URL}")
+print(f"🚀 Запускаємо фінального безвідмовного ШІ-бота на {RENDER_EXTERNAL_URL}")
 
 @app.route('/' + tg_token, methods=['POST'])
 def getMessage():
@@ -22,7 +21,7 @@ def getMessage():
 
 @app.route("/")
 def webhook_index():
-    return "Энциклопедический ШІ-сервер работает стабильно!", 200
+    return "Безвідмовний ШІ-сервер працює!", 200
 
 @bot.message_handler(content_types=['text'])
 def handle_message(message):
@@ -30,35 +29,30 @@ def handle_message(message):
     print("Отримано запит в Telegram: " + user_prompt)
     
     if user_prompt.lower() == "/start":
-        bot.reply_to(message, "👋 Привіт! Я твій всезнаючий автономний Бот-ШІ. Я підключений до глобальної бази знань і можу знайти інформацію про що завгодно! Просто напиши мені слово або термін українською мовою.")
+        bot.reply_to(message, "👋 Привіт! Я твій всезнаючий автономний ШІ-бот. Я знаю абсолютно все на світі! Запитай мене про що завгодно українською мовою.")
         return
 
     try:
-        # Прямой легальный запрос к украинской Википедии через официальное API (без ключей и блокировок)
-        search_query = urllib.parse.quote(user_prompt)
-        wiki_url = f"https://wikipedia.org{search_query}&redirects=1"
+        # Прямой текстовый запрос к безотказному ИИ-провайдеру (модель openai)
+        # Этот шлюз возвращает чистый текст БЕЗ JSON, поэтому здесь технически нечему ломаться
+        system_rules = urllib.parse.quote("Ти дружній асистент. Обов'язково відповідай коротко і виключно українською мовою. Запит: ")
+        encoded_prompt = urllib.parse.quote(user_prompt)
         
-        req = urllib.request.Request(wiki_url, headers={'User-Agent': 'Mozilla/5.0'})
+        ai_url = f"https://pollinations.ai{system_rules}{encoded_prompt}?model=openai&cache=false"
+        req = urllib.request.Request(ai_url, headers={'User-Agent': 'Mozilla/5.0'})
         
-        with urllib.request.urlopen(req, timeout=15) as response:
-            data = json.loads(response.read().decode('utf-8'))
-            pages = data.get("query", {}).get("pages", {})
+        with urllib.request.urlopen(req, timeout=20) as response:
+            ai_answer = response.read().decode('utf-8').strip()
             
-            page_id = list(pages.keys())[0]
-            if page_id != "-1":
-                ai_answer = pages[page_id].get("extract", "")
-                # Ограничиваем длину ответа для удобства чтения в Telegram
-                if len(ai_answer) > 600:
-                    ai_answer = ai_answer[:600] + "..."
-            else:
-                ai_answer = f"🤖 Я обшукав усю глобальну базу знань, але точної статті за запитом '{user_prompt}' не знайдено. Спробуй написати назву міста, історичної постаті чи терміну більш точно (наприклад: 'Київ', 'Шевченко', 'Програмування')."
-                
-        bot.reply_to(message, ai_answer)
-        print("База знань успішно надіслала відповідь!")
-        
+        if ai_answer:
+            bot.reply_to(message, ai_answer)
+            print("ШІ успішно надіслав відповідь!")
+        else:
+            bot.reply_to(message, "🤖 Мої мізки замислилися. Напиши це повідомлення ще раз!")
+            
     except Exception as e:
-        print("Помилка бази знань: ", e)
-        bot.reply_to(message, "🤖 Моя мережа знань на секунду задумалася. Напиши це повідомлення ще раз прямо зараз!")
+        print("Помилка ШІ-сервера: ", e)
+        bot.reply_to(message, "🤖 На секунду зник зв'язок із ШІ. Надішли це повідомлення ще раз прямо зараз!")
 
 if __name__ == "__main__":
     bot.remove_webhook()
