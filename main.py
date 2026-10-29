@@ -8,7 +8,7 @@ from http.server import SimpleHTTPRequestHandler, HTTPServer
 hf_token = os.environ.get('HF_TOKEN')
 
 # 2. Налаштовуємо клієнтів (Вставте ваш НОВИЙ токен Telegram всередину лапок)
-bot = telebot.TeleBot("9132142154:AAFTPiSnZuS_TY0NOXi8CkEqj5283lPu22Y")
+bot = telebot.TeleBot("9132142154:AAFMLBpZ6HUm7qSUB8L3Qw1Q4oUZwOntNqI")
 client = InferenceClient(api_key=hf_token)
 
 print("🚀 Стабільний автономний ШІ-бот успішно запущений на Render!")
