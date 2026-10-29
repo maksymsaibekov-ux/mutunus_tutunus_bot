@@ -1,17 +1,18 @@
 import telebot
-from g4f.client import Client
+from huggingface_hub import InferenceClient
 import os
 import threading
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 
-# 1. Зчитуємо токен та ШІ-ключ з налаштувань сервера Render
+# 1. Безпечно зчитуємо токен Telegram та ключ ШІ з налаштувань Render
 tg_token = os.environ.get('TELEGRAM_TOKEN')
-ai_client = Client()
+hf_token = os.environ.get('HF_TOKEN')
 
-# 2. Налаштовуємо бота
+# 2. Ініціалізуємо офіційних клієнтів
 bot = telebot.TeleBot(tg_token)
+client = InferenceClient(api_key=hf_token)
 
-print("🚀 Фінальний автономний ШІ-бот успішно запущений на Render!")
+print("🚀 Офіційний автономний ШІ-бот успішно запущений на Render!")
 
 @bot.message_handler(content_types=['text'])
 def handle_message(message):
@@ -23,28 +24,25 @@ def handle_message(message):
         return
 
     try:
-        # Викликаємо безкоштовну і відкриту модель Llama 3
-        response = ai_client.chat.completions.create(
-            model="gpt-4o-mini",
+        # Використовуємо офіційну відкриту модель Llama 3.2, яка працює легально через ваш ключ
+        response = client.chat.completions.create(
+            model="meta-llama/Llama-3.2-3B-Instruct",
             messages=[
-                {"role": "system", "content": "Ти дружній асистент. Обов'язково відповідай коротко і виключно українською мовою."},
+                {"role": "system", "content": "Ти дружній та розумний асистент. Обов'язково відповідай коротко і виключно українською мовою."},
                 {"role": "user", "content": user_prompt}
-            ]
+            ],
+            max_tokens=300
         )
         
-        if hasattr(response, 'choices'):
-            ai_answer = response.choices.message.content
-        else:
-            ai_answer = str(response)
-            
+        ai_answer = response.choices.message.content
         bot.reply_to(message, ai_answer)
         print("ШІ успішно відповів солов'їною!")
         
     except Exception as e:
-        print("Помилка підключення до ШІ: ", e)
-        bot.reply_to(message, "🤖 Мої віртуальні мізки зараз відпочивають. Напиши мені ще раз прямо зараз!")
+        print("Помилка сервера ШІ: ", e)
+        bot.reply_to(message, "🤖 Мої віртуальні мізки трохи задумалися. Напиши мені це повідомлення ще раз прямо зараз!")
 
-# ХИТРІСТЬ ДЛЯ RENDER: утримуємо порт 10000 відкритим
+# Фейковий веб-сервер для утримання Render у режимі Live
 def run_fake_server():
     server_address = ('0.0.0.0', 10000)
     httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
