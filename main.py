@@ -20,7 +20,7 @@ def handle_message(message):
     print("Отримано запит в Telegram: " + user_prompt)
     
     if user_prompt == "/start":
-        bot.reply_to(message, "👋 Привіт! Я твій особистий автономний ШІ-бот. Задай мені будь-яке питання українською мовою!")
+        bot.reply_to(message, "👋 Привіт! Я твій особистісний автономний ШІ-бот. Задай мені будь-яке питання українською мовою!")
         return
 
     try:
@@ -28,7 +28,7 @@ def handle_message(message):
         response = client.chat.completions.create(
             model="meta-llama/Llama-3.2-3B-Instruct",
             messages=[
-                {"role": "system", "content": "Ти дружній та розумний асистент. Обов'язково відповідай коротко і виключно українською мовою."},
+                {"role": "system", "content": "Ти дружній асистент. Обов'язково відповідай коротко і виключно українською мовою."},
                 {"role": "user", "content": user_prompt}
             ],
             max_tokens=300
