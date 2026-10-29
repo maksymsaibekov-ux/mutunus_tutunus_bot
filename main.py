@@ -22,7 +22,8 @@ def ask_ai(text):
         },
         timeout=30,
     )
-    r.raise_for_status()
+    if r.status_code != 200:
+        raise Exception(f"Groq {r.status_code}: {r.text[:300]}")
     return r.json()["choices"][0]["message"]["content"]
 
 
@@ -44,9 +45,9 @@ def webhook():
     if msg and "text" in msg:
         try:
             answer = ask_ai(msg["text"])
-        except Exception as e:
-            print("AI error:", e)
-            answer = "Щось пішло не так з AI 😢"
+                except Exception as e:
+            print("AI error:", e, flush=True)
+            answer = f"Помилка: {e}"
         requests.post(
             f"{TG_URL}/sendMessage",
             json={"chat_id": msg["chat"]["id"], "text": answer[:4000]},
