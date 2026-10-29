@@ -1,13 +1,17 @@
 import telebot
-from g4f.client import Client
+from google import genai
+import os
 import threading
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 
-# 1. Вставляємо ваш токен Telegram
-bot = telebot.TeleBot("9132142154:AAGqeXNGT51i_ouCpK2Vtk8NCF5THY_ONRQ")
-ai_client = Client()
+# 1. Зчитуємо ключ Gemini з налаштувань сервера Render
+google_key = os.environ.get('GEMINI_API_KEY')
 
-print("🚀 Фінальна версія бота запущена на сервері Render!")
+# 2. Налаштовуємо клієнтів
+bot = telebot.TeleBot("9132142154:AAGqeXNGT51i_ouCpK2Vtk8NCF5THY_ONRQ")
+ai_client = genai.Client(api_key=google_key)
+
+print("🚀 Офіційний Бот Gemini успішно запущений на Render!")
 
 @bot.message_handler(content_types=['text'])
 def handle_message(message):
@@ -15,40 +19,32 @@ def handle_message(message):
     print("Отримано запит: " + user_prompt)
     
     if user_prompt == "/start":
-        bot.reply_to(message, "👋 Привіт! Я твій особистий ШІ-бот. Задай мені будь-яке питання українською мовою!")
+        bot.reply_to(message, "👋 Привіт! Я твій офіційний безкоштовний бот на базі Google Gemini. Запитай мене про що завгодно українською!")
         return
 
     try:
-        response = ai_client.chat.completions.create(
-            model="gemini-2.0-flash",
-            messages=[
-                {"role": "system", "content": "Ти дружній асистент. Обов'язково відповідай коротко і виключно українською мовою."},
-                {"role": "user", "content": user_prompt}
-            ]
+        # Використовуємо стабільну офіційну модель Gemini 2.0
+        response = ai_client.models.generate_content(
+            model='gemini-2.0-flash', 
+            contents=f"Ти дружній асистент. Дай відповідь обов'язково українською мовою: {user_prompt}",
         )
         
-        if hasattr(response, 'choices'):
-            ai_answer = response.choices.message.content
+        if response.text:
+            bot.reply_to(message, response.text)
+            print("Gemini успішно відповів!")
         else:
-            ai_answer = str(response)
+            bot.reply_to(message, "ШІ задумався. Спробуй ще раз!")
             
-        bot.reply_to(message, ai_answer)
-        print("ШІ успішно відповів користувачу!")
-        
     except Exception as e:
-        print("Помилка підключення: ", e)
-        bot.reply_to(message, "🤖 Ой, мережа ШІ на секунду перервалася. Напиши мені це повідомлення ще раз прямо зараз!")
+        print("Помилка Gemini API: ", e)
+        bot.reply_to(message, "🤖 Ой, сервери Google зараз дуже завантажені. Напиши мені це повідомлення ще раз прямо зараз!")
 
-# -------------------------------------------------------------
-# ХИТРІСТЬ ДЛЯ RENDER: створюємо фейковий веб-сервер на порті 10000
+# Фейковий веб-сервер для утримання Render у режимі Live
 def run_fake_server():
     server_address = ('0.0.0.0', 10000)
     httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
-    print("Фейковий веб-сервер для Render запущено на порті 10000")
     httpd.serve_forever()
 
-# Запускаємо фейковий сервер в окремому потоці, щоб він не заважав боту
 threading.Thread(target=run_fake_server, daemon=True).start()
-# -------------------------------------------------------------
 
 bot.polling(none_stop=True, skip_pending=True, timeout=30)
