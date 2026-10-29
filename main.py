@@ -1,43 +1,45 @@
 import telebot
-from google import genai
+from huggingface_hub import InferenceClient
 import os
 import threading
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 
-# 1. Автоматично зчитуємо офіційний ключ Gemini з налаштувань сервера Render
-google_key = os.environ.get('GEMINI_API_KEY')
+# 1. Считываем безкоштовний ключ ШІ з налаштувань сервера Render
+hf_token = os.environ.get('HF_TOKEN')
 
-# 2. Налаштовуємо клієнтів (Вставте ваш НОВИЙ токен Telegram у лапки)
+# 2. Налаштовуємо клієнтів (Вставте ваш НОВИЙ токен Telegram всередину лапок)
 bot = telebot.TeleBot("9132142154:AAFTPiSnZuS_TY0NOXi8CkEqj5283lPu22Y")
-ai_client = genai.Client(api_key=google_key)
+client = InferenceClient(api_key=hf_token)
 
-print("🚀 Офіційний автономний Бот Gemini успішно запущений на Render!")
+print("🚀 Стабільний автономний ШІ-бот успішно запущений на Render!")
 
 @bot.message_handler(content_types=['text'])
 def handle_message(message):
     user_prompt = message.text
-    print("Отримано запит: " + user_prompt)
+    print("Отримано запит в Telegram: " + user_prompt)
     
     if user_prompt == "/start":
-        bot.reply_to(message, "👋 Привіт! Я твій офіційний безкоштовний бот на базі Google Gemini. Запитай мене про що завгодно українською!")
+        bot.reply_to(message, "👋 Привіт! Я твій особистий автономний ШІ-бот. Задай мені будь-яке питання українською мовою!")
         return
 
     try:
-        # Використовуємо стабільну офіційну модель Gemini 2.0
-        response = ai_client.models.generate_content(
-            model='gemini-2.0-flash', 
-            contents=f"Ти дружній асистент. Дай відповідь обов'язково українською мовою: {user_prompt}",
+        # Використовуємо стабільну відкриту модель Qwen 2.5
+        response = client.chat.completions.create(
+            model="Qwen/Qwen2.5-7B-Instruct",
+            messages=[
+                {"role": "system", "content": "Ти дружній та розумний асистент. Обов'язково відповідай коротко і виключно українською мовою."},
+                {"role": "user", "content": user_prompt}
+            ],
+            max_tokens=300
         )
         
-        if response.text:
-            bot.reply_to(message, response.text)
-            print("Gemini успішно відповів!")
-        else:
-            bot.reply_to(message, "ШІ задумався. Спробуй ще раз.")
-            
+        ai_answer = response.choices.message.content
+        bot.reply_to(message, ai_answer)
+        print("ШІ успішно відповів солов'їною!")
+        
     except Exception as e:
-        print("Помилка Gemini API: ", e)
-        bot.reply_to(message, "🤖 Ой, сервери Google зараз дуже завантажені. Напиши мені це повідомлення ще раз прямо зараз!")
+        print("Помилка сервера ШІ: ", e)
+        bot.reply_to(message, "🤖 Мої віртуальні мізки трохи задумалися. Напиши мені це повідомлення ще раз прямо зараз!")
 
 # Фейковий веб-сервер для утримання Render у режимі Live
 def run_fake_server():
