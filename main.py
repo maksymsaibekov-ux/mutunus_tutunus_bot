@@ -1,67 +1,47 @@
-import telebot
 import os
-import urllib.request
-import json
+import requests
 from flask import Flask, request
 
-tg_token = os.environ.get('TELEGRAM_TOKEN')
-RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
-
-bot = telebot.TeleBot(tg_token)
 app = Flask(__name__)
 
-print(f"🚀 Запускаємо фінального безвідмовного ШІ-бота на {RENDER_EXTERNAL_URL}")
+TG_TOKEN = os.environ["TG_TOKEN"]
+GROQ_KEY = os.environ["GROQ_API_KEY"]
+TG_URL = f"https://api.telegram.org/bot{TG_TOKEN}"
 
-@app.route('/' + tg_token, methods=['POST'])
-def getMessage():
-    json_string = request.get_data().decode('utf-8')
-    update = telebot.types.Update.de_json(json_string)
-    bot.process_new_updates([update])
-    return "!", 200
+
+def ask_ai(text):
+    r = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={"Authorization": f"Bearer {GROQ_KEY}"},
+        json={
+            "model": "llama-3.3-70b-versatile",
+            "messages": [
+                {"role": "system", "content": "Ти корисний помічник. Відповідай українською."},
+                {"role": "user", "content": text},
+            ],
+        },
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json()["choices"][0]["message"]["content"]
+
 
 @app.route("/")
-def webhook_index():
-    return "ШІ-сервер працює стабільно!", 200
+def home():
+    return "ok"
 
-@bot.message_handler(content_types=['text'])
-def handle_message(message):
-    user_prompt = message.text.strip()
-    print("Отримано запит в Telegram: " + user_prompt)
-    
-    if user_prompt.lower() == "/start":
-        bot.reply_to(message, "👋 Привіт! Я твій всезнаючий автономний ШІ-бот. Я знаю абсолютно все на світі! Запитай мене про що завгодно українською мовою.")
-        return
 
-    try:
-        # Пряме офіційне звернення до безкоштовного ШІ-дзеркала Hugging Face (модель Qwen 2.5)
-        # Цей шлюз не використовує g4f чи зовнішні провайдери, тому працює безвідмовно
-        url = "https://pollinations.ai"
-        headers = {"Content-Type": "application/json"}
-        data = {
-            "messages": [
-                {"role": "system", "content": "Ти дружній та дуже розумний асистент. Обов'язково відповідай виключно українською мовою, коротко і чітко на будь-які запитання користувача."},
-                {"role": "user", "content": user_prompt}
-            ],
-            "model": "qwen",
-            "json": False
-        }
-        
-        req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers=headers)
-        
-        with urllib.request.urlopen(req, timeout=20) as response:
-            ai_answer = response.read().decode('utf-8').strip()
-            
-        if ai_answer:
-            bot.reply_to(message, ai_answer)
-            print("ШІ успішно надіслав відповідь!")
-        else:
-            bot.reply_to(message, "🤖 ШІ задумався. Спробуй ще раз!")
-            
-    except Exception as e:
-        print("Помилка ШІ-сервера: ", e)
-        bot.reply_to(message, "🤖 На секунду зник зв'язок із ШІ. Надішли це повідомлення ще раз прямо зараз!")
-
-if __name__ == "__main__":
-    bot.remove_webhook()
-    bot.set_webhook(url=f"{RENDER_EXTERNAL_URL}/{tg_token}")
-    app.run(host="0.0.0.0", port=10000)
+@app.route(f"/{TG_TOKEN}", methods=["POST"])
+def webhook():
+    msg = (request.get_json() or {}).get("message")
+    if msg and "text" in msg:
+        try:
+            answer = ask_ai(msg["text"])
+        except Exception as e:
+            print("AI error:", e)
+            answer = "Щось пішло не так з AI 😢"
+        requests.post(
+            f"{TG_URL}/sendMessage",
+            json={"chat_id": msg["chat"]["id"], "text": answer[:4000]},
+        )
+    return "ok"
