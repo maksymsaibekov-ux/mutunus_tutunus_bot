@@ -1,19 +1,17 @@
 import telebot
-from google import genai
 import os
+import urllib.request
+import json
 from flask import Flask, request
 
-# 1. Безпечно зчитуємо токен Telegram та свіжий ключ Gemini з налаштувань Render
+# 1. Зчитуємо токен Telegram з налаштувань Render
 tg_token = os.environ.get('TELEGRAM_TOKEN')
-google_key = os.environ.get('GEMINI_API_KEY')
 RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
 
-# 2. Ініціалізуємо офіційних хмарних клієнтів
 bot = telebot.TeleBot(tg_token)
-ai_client = genai.Client(api_key=google_key)
 app = Flask(__name__)
 
-print(f"🚀 Запускаємо розумного автономного ШІ-бота на {RENDER_EXTERNAL_URL}")
+print(f"🚀 Запускаємо безвідмовного ШІ-бота на {RENDER_EXTERNAL_URL}")
 
 @app.route('/' + tg_token, methods=['POST'])
 def getMessage():
@@ -24,7 +22,7 @@ def getMessage():
 
 @app.route("/")
 def webhook_index():
-    return "Бот працює і думає мізками Gemini 1.5!", 200
+    return "Бот працює зі стабільним ШІ!", 200
 
 @bot.message_handler(content_types=['text'])
 def handle_message(message):
@@ -32,25 +30,35 @@ def handle_message(message):
     print("Отримано запит в Telegram: " + user_prompt)
     
     if user_prompt.lower().strip() == "/start":
-        bot.reply_to(message, "👋 Привіт! Я твій офіційний автономний ШІ-бот на базі Google Gemini 1.5. Я знаю геть усе на світі! Запитай мене про що завгодно українською мовою!")
+        bot.reply_to(message, "👋 Привіт! Я твій повністю автономний ШІ-бот. Запитай мене про що завгодно українською мовою!")
         return
 
     try:
-        # Викликаємо суперстабільну модель Gemini 1.5 Flash з великими безкоштовними лімітами
-        response = ai_client.models.generate_content(
-            model='gemini-1.5-flash', 
-            contents=f"Ти дружній та дуже розумний асистент. Дай відповідь обов'язково українською мовою, коротко і лаконічно: {user_prompt}",
+        # 2. Прямий стабільний запит до безлімітного ШІ-шлюзу без використання API-ключів
+        req = urllib.request.Request(
+            "https://pollinations.ai", 
+            data=json.dumps({
+                "messages": [
+                    {"role": "system", "content": "Ти дружній та розумний асистент. Обов'язково відповідай коротко, лаконічно і виключно українською мовою."},
+                    {"role": "user", "content": user_prompt}
+                ],
+                "model": "qwen"
+            }).encode('utf-8'),
+            headers={'Content-Type': 'application/json'}
         )
         
-        if response.text:
-            bot.reply_to(message, response.text)
-            print("Gemini успішно надіслав ШІ-відповідь!")
+        with urllib.request.urlopen(req, timeout=15) as response:
+            ai_answer = response.read().decode('utf-8')
+            
+        if ai_answer:
+            bot.reply_to(message, ai_answer)
+            print("ШІ успішно надіслав текстову відповідь!")
         else:
-            bot.reply_to(message, "Я трохи замислився, спробуй перефразувати питання!")
+            bot.reply_to(message, "Я трохи замислився, спробуй ще раз!")
             
     except Exception as e:
-        print("Помилка Gemini API: ", e)
-        bot.reply_to(message, "🤖 Мої віртуальні мізки зараз перевантажені. Напиши мені це повідомлення ще раз прямо зараз!")
+        print("Помилка підключення до ШІ: ", e)
+        bot.reply_to(message, "🤖 Мої віртуальні мізки зараз оновлюються. Напиши мені це повідомлення ще раз прямо зараз!")
 
 if __name__ == "__main__":
     bot.remove_webhook()
