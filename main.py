@@ -31,6 +31,13 @@ def home():
     return "ok"
 
 
+@app.route("/set_webhook")
+def set_webhook():
+    url = f"https://mutunus-tutunus-bot.onrender.com/{TG_TOKEN}"
+    r = requests.get(f"{TG_URL}/setWebhook", params={"url": url})
+    return r.text
+
+
 @app.route(f"/{TG_TOKEN}", methods=["POST"])
 def webhook():
     msg = (request.get_json() or {}).get("message")
