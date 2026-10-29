@@ -39,7 +39,7 @@ def handle_message(message):
     try:
         # Використовуємо стабільну відкриту модель Llama 3.2
         response = client.chat.completions.create(
-            model="meta-llama/Llama-3.2-3B-Instruct",
+            model="Qwen/Qwen2.5-7B-Instruct",
             messages=[
                 {"role": "system", "content": "Ти дружній асистент. Обов'язково відповідай коротко і виключно українською мовою."},
                 {"role": "user", "content": user_prompt}
