@@ -20,8 +20,8 @@ def handle_message(message):
 
     try:
         # Викликаємо швидку безкоштовну модель gpt-4o-mini, сервери якої зараз повністю вільні
-        response = ai_client.chat.completions.create(
-            model="gpt-4o-mini",
+       response = ai_client.chat.completions.create(
+            model="yi-34b",
             messages=[
                 {"role": "system", "content": "Ти дружній асистент. Обов'язково відповідай коротко і виключно українською мовою."},
                 {"role": "user", "content": user_prompt}
