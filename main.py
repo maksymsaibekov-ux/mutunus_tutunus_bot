@@ -4,7 +4,7 @@ import os
 import threading
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 
-# 1. Зчитуємо ключ Gemini з налаштувань сервера Render
+# 1. Автоматично зчитуємо ключ Gemini з налаштувань сервера Render
 google_key = os.environ.get('GEMINI_API_KEY')
 
 # 2. Налаштовуємо клієнтів
