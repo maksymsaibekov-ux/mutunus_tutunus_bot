@@ -25,7 +25,7 @@ def handle_message(message):
     try:
         # Використовуємо стабільну відкриту модель Qwen 2.5
         response = client.chat.completions.create(
-            model="Qwen/Qwen2.5-7B-Instruct",
+            model="meta-llama/Llama-3.2-3B-Instruct",
             messages=[
                 {"role": "system", "content": "Ти дружній та розумний асистент. Обов'язково відповідай коротко і виключно українською мовою."},
                 {"role": "user", "content": user_prompt}
