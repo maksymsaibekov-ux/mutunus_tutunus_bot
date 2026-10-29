@@ -1,18 +1,31 @@
 import telebot
 from huggingface_hub import InferenceClient
 import os
-import threading
-from http.server import SimpleHTTPRequestHandler, HTTPServer
+from flask import Flask, request
 
-# 1. Безпечно зчитуємо токен Telegram та ключ ШІ з налаштувань Render
+# 1. Зчитуємо ключі з налаштувань Render
 tg_token = os.environ.get('TELEGRAM_TOKEN')
 hf_token = os.environ.get('HF_TOKEN')
 
-# 2. Ініціалізуємо офіційних клієнтів
+# 2. Назва вашого сервера на Render (береться автоматично)
+RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
+
 bot = telebot.TeleBot(tg_token)
 client = InferenceClient(api_key=hf_token)
+app = Flask(__name__)
 
-print("🚀 Офіційний автономний ШІ-бот успішно запущений на Render!")
+print(f"🚀 Запускаємо бота в режимі Webhook на {RENDER_EXTERNAL_URL}")
+
+@app.route('/' + tg_token, methods=['POST'])
+def getMessage():
+    json_string = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_string)
+    bot.process_new_updates([update])
+    return "!", 200
+
+@app.route("/")
+def webhook_index():
+    return "Бот працює!", 200
 
 @bot.message_handler(content_types=['text'])
 def handle_message(message):
@@ -20,11 +33,11 @@ def handle_message(message):
     print("Отримано запит в Telegram: " + user_prompt)
     
     if user_prompt == "/start":
-        bot.reply_to(message, "👋 Привіт! Я твій особистісний автономний ШІ-бот. Задай мені будь-яке питання українською мовою!")
+        bot.reply_to(message, "👋 Привіт! Я твій повністю автономний ШІ-бот. Задай мені питання українською мовою!")
         return
 
     try:
-        # Використовуємо офіційну відкриту модель Llama 3.2, яка працює легально через ваш ключ
+        # Використовуємо стабільну відкриту модель Llama 3.2
         response = client.chat.completions.create(
             model="meta-llama/Llama-3.2-3B-Instruct",
             messages=[
@@ -36,18 +49,15 @@ def handle_message(message):
         
         ai_answer = response.choices.message.content
         bot.reply_to(message, ai_answer)
-        print("ШІ успішно відповів солов'їною!")
         
     except Exception as e:
-        print("Помилка сервера ШІ: ", e)
-        bot.reply_to(message, "🤖 Мої віртуальні мізки трохи задумалися. Напиши мені це повідомлення ще раз прямо зараз!")
+        print("Помилка ШІ: ", e)
+        bot.reply_to(message, "🤖 Мої віртуальні мізки трохи задумалися. Напиши ще раз!")
 
-# Фейковий веб-сервер для утримання Render у режимі Live
-def run_fake_server():
-    server_address = ('0.0.0.0', 10000)
-    httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
-    httpd.serve_forever()
-
-threading.Thread(target=run_fake_server, daemon=True).start()
-
-bot.polling(none_stop=True, skip_pending=True, timeout=30)
+if __name__ == "__main__":
+    # Налаштовуємо вебхук у Telegram
+    bot.remove_webhook()
+    bot.set_webhook(url=f"{RENDER_EXTERNAL_URL}/{tg_token}")
+    
+    # Запускаємо сервер на порті 10000, який вимагає Render
+    app.run(host="0.0.0.0", port=10000)
