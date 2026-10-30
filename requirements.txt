@@ -3,3 +3,4 @@ requests
 gunicorn
 pypdf
 python-docx
+youtube-transcript-api
