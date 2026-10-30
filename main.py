@@ -10,6 +10,7 @@ from flask import Flask, request
 from pypdf import PdfReader
 from docx import Document as DocxDocument
 from youtube_transcript_api import YouTubeTranscriptApi
+import social
 
 app = Flask(__name__)
 
@@ -429,6 +430,55 @@ def handle_social(source, topic):
     return f"📊 {label}: проаналізовано {len(posts)} дописів за темою «{topic}»\n\n{out}"
 
 
+def handle_trend(request_text):
+    if not request_text:
+        raise UserError(
+            "Напиши, що тебе цікавить, наприклад:\n"
+            "/trend що люди думають про нову політику Apple\n"
+            "/trend які проблеми згадують українські фрилансери\n"
+            "/trend що цікавого обговорюють про ШІ"
+        )
+    if not social.connected():
+        raise UserError(
+            "Жодне джерело не підключено. Найпростіше безкоштовне: Bluesky "
+            "(змінні BSKY_HANDLE і BSKY_APP_PASSWORD на Render)."
+        )
+
+    posts, queries, notes = social.collect(groq, request_text)
+    if not posts:
+        msg = "За цим запитом нічого не знайшов."
+        if notes:
+            msg += "\n⚠️ " + "; ".join(notes)
+        raise UserError(msg)
+
+    budget = ANALYZE_CHARS // len(posts)
+    blocks = []
+    for src, items in posts.items():
+        body = "\n".join("- " + p.replace("\n", " ")[:400] for p in items)
+        blocks.append(f"=== {src} ===\n{body[:budget]}")
+    material = "\n\n".join(blocks)
+
+    system = (
+        PROMPTS["analyze"]
+        + f"\n\nЗапит користувача: «{request_text}». Пристосуй відповідь до цього запиту: "
+        "якщо питають про проблеми, зосередься на проблемах; якщо про цікаве, виділи "
+        "найцікавіше. Коли доречно, вказуй джерело (Bluesky, X, Threads). В одному рядку "
+        "нагадай, що це вибірка дописів, а не думка всієї мережі чи суспільства."
+    )
+    out = groq(
+        [{"role": "system", "content": system}, {"role": "user", "content": material}],
+        temperature=0.3,
+    ) or "Порожня відповідь, спробуй ще раз."
+
+    counts = ", ".join(f"{s}: {len(v)}" for s, v in posts.items())
+    head = (
+        "🔎 Запити: " + ", ".join(f"«{q}»" for q in queries)
+        + f"\n📥 Дописів: {counts}\n\n"
+    )
+    tail = ("\n\n⚠️ " + "; ".join(notes)) if notes else ""
+    return head + out + tail
+
+
 # ---------- Команди ----------
 def handle_text(chat_id, text):
     parts = text.split(None, 1)
@@ -482,6 +532,8 @@ def handle_text(chat_id, text):
         redis("SET", f"mode:{chat_id}", mode, "EX", 900)
         what = "добірку дописів чи коментарів" if mode == "analyze" else "текст для конспекту"
         return f"Надішли {what} наступним повідомленням (або файлом PDF/DOCX/TXT). Маю 15 хвилин 🙂"
+    if cmd == "/trend":
+        return handle_trend(arg)
     if cmd == "/x":
         return handle_social("x", arg)
     if cmd == "/threads":
