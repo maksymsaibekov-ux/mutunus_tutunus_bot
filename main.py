@@ -1,5 +1,6 @@
 import os
 import json
+import hmac
 import requests
 from flask import Flask, request
 
@@ -13,6 +14,9 @@ MODEL = os.environ.get("MODEL", "openai/gpt-oss-120b")
 AUTO_LEARN = os.environ.get("AUTO_LEARN", "1") == "1"
 TG_URL = f"https://api.telegram.org/bot{TG_TOKEN}"
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+WEBHOOK_SECRET = os.environ["WEBHOOK_SECRET"]
+ALLOWED_IDS = {int(x) for x in os.environ.get("ALLOWED_IDS", "").split(",") if x.strip()}
 
 BASE_PROMPT = (
     "Ти дружній і розумний помічник у Telegram. "
@@ -148,21 +152,36 @@ def home():
 
 @app.route("/set_webhook")
 def set_webhook():
-    url = f"https://mutunus-tutunus-bot.onrender.com/{TG_TOKEN}"
-    r = requests.get(f"{TG_URL}/setWebhook", params={"url": url})
+    r = requests.post(
+        f"{TG_URL}/setWebhook",
+        json={
+            "url": "https://mutunus-tutunus-bot.onrender.com/webhook",
+            "secret_token": WEBHOOK_SECRET,
+            "allowed_updates": ["message"],
+            "drop_pending_updates": True,
+        },
+    )
     return r.text
 
 
-@app.route(f"/{TG_TOKEN}", methods=["POST"])
+@app.route("/webhook", methods=["POST"])
 def webhook():
-    msg = (request.get_json() or {}).get("message")
+    header = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if not hmac.compare_digest(header, WEBHOOK_SECRET):
+        return "forbidden", 403
+
+    msg = (request.get_json(silent=True) or {}).get("message")
     if msg and "text" in msg:
         chat_id = msg["chat"]["id"]
-        try:
-            answer = handle_text(chat_id, msg["text"])
-        except Exception as e:
-            print("Error:", e, flush=True)
-            answer = f"Помилка: {e}"
+        user_id = msg.get("from", {}).get("id")
+        if ALLOWED_IDS and user_id not in ALLOWED_IDS:
+            answer = "Вибач, цей бот приватний."
+        else:
+            try:
+                answer = handle_text(chat_id, msg["text"][:2000])
+            except Exception as e:
+                print("Error:", e, flush=True)
+                answer = "Щось пішло не так, спробуй пізніше."
         requests.post(
             f"{TG_URL}/sendMessage",
             json={"chat_id": chat_id, "text": answer[:4000]},
