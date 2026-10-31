@@ -238,7 +238,8 @@ def vision(image_bytes, mime, instruction):
                 }
             ],
             "temperature": 0.1,
-            "max_completion_tokens": 1500,
+            "max_completion_tokens": 4000,
+            "reasoning_format": "hidden",
         },
         timeout=90,
     )
