@@ -24,6 +24,7 @@ VEC_URL = os.environ["UPSTASH_VECTOR_URL"].rstrip("/")
 VEC_TOKEN = os.environ["UPSTASH_VECTOR_TOKEN"]
 MODEL = os.environ.get("MODEL", "openai/gpt-oss-120b")
 VISION_MODEL = os.environ.get("VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+LIGHT_MODEL = os.environ.get("LIGHT_MODEL", "openai/gpt-oss-20b")
 AUTO_LEARN = os.environ.get("AUTO_LEARN", "1") == "1"
 TG_URL = f"https://api.telegram.org/bot{TG_TOKEN}"
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -210,16 +211,20 @@ def ingest_text(chat_id, name, text):
 
 
 # ---------- AI ----------
-def groq(messages, temperature=0.7):
+def groq(messages, temperature=0.7, model=None):
     r = requests.post(
         GROQ_URL,
         headers={"Authorization": f"Bearer {GROQ_KEY}"},
-        json={"model": MODEL, "messages": messages, "temperature": temperature},
+        json={"model": model or MODEL, "messages": messages, "temperature": temperature},
         timeout=90,
     )
     if r.status_code != 200:
         raise Exception(f"Groq {r.status_code}: {r.text[:300]}")
     return r.json()["choices"][0]["message"].get("content") or ""
+
+
+def groq_light(messages, temperature=0):
+    return groq(messages, temperature, model=LIGHT_MODEL)
 
 
 def vision(image_bytes, mime, instruction):
@@ -271,6 +276,7 @@ def extract_fact(text):
             {"role": "user", "content": text},
         ],
         temperature=0,
+        model=LIGHT_MODEL,
     ).strip()
     if not out or "NONE" in out.upper():
         return None
@@ -384,8 +390,8 @@ def count_str(posts):
 def compare_topics(topic_a, topic_b):
     if not social.connected():
         raise UserError("Жодне джерело не підключено. Перевір змінні на Render.")
-    posts_a, _, notes_a = social.collect(groq, topic_a)
-    posts_b, _, notes_b = social.collect(groq, topic_b)
+    posts_a, _, notes_a = social.collect(groq_light, topic_a)
+    posts_b, _, notes_b = social.collect(groq_light, topic_b)
     if not posts_a or not posts_b:
         missing = topic_a if not posts_a else topic_b
         raise UserError(f"За темою «{missing}» нічого не знайшов, порівнювати нема з чим.")
@@ -418,7 +424,7 @@ def handle_trend(request_text):
     if not social.connected():
         raise UserError("Жодне джерело не підключено. Перевір змінні на Render.")
 
-    posts, queries, notes = social.collect(groq, request_text)
+    posts, queries, notes = social.collect(groq_light, request_text)
     if not posts:
         msg = "За цим запитом нічого не знайшов."
         if notes:
