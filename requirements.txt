@@ -4,3 +4,4 @@ gunicorn
 pypdf
 python-docx
 youtube-transcript-api
+edge-tts
