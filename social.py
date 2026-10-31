@@ -1,7 +1,9 @@
+import html
 import json
 import os
 import re
 import time
+from urllib.parse import quote
 import requests
 
 BSKY_HANDLE = os.environ.get("BSKY_HANDLE", "")
@@ -10,6 +12,11 @@ X_BEARER = os.environ.get("X_BEARER_TOKEN", "")
 THREADS_TOKEN = os.environ.get("THREADS_TOKEN", "")
 X_MAX_POSTS = int(os.environ.get("X_MAX_POSTS", "20"))        # кожен допис в X платний
 BSKY_MAX_POSTS = int(os.environ.get("BSKY_MAX_POSTS", "40"))  # безкоштовно, до 100
+MASTODON_ON = os.environ.get("MASTODON", "1") == "1"          # без ключів; вимкнути: MASTODON=0
+MASTODON_INSTANCE = (
+    os.environ.get("MASTODON_INSTANCE", "mastodon.social")
+    .replace("https://", "").replace("http://", "").strip("/")
+)
 
 _bsky = {"jwt": None, "time": 0}
 
@@ -18,6 +25,8 @@ def connected():
     names = []
     if BSKY_HANDLE and BSKY_APP_PASSWORD:
         names.append("Bluesky")
+    if MASTODON_ON:
+        names.append("Mastodon")
     if X_BEARER:
         names.append("X")
     if THREADS_TOKEN:
@@ -62,6 +71,28 @@ def fetch_bluesky(query):
     return out
 
 
+# ---------- Mastodon (хештеги, без ключів) ----------
+def fetch_mastodon(tag):
+    r = requests.get(
+        f"https://{MASTODON_INSTANCE}/api/v1/timelines/tag/{quote(tag)}",
+        params={"limit": 40},
+        timeout=30,
+    )
+    if r.status_code == 404:  # такого хештегу ще немає
+        return []
+    if r.status_code != 200:
+        raise Exception(f"Mastodon {r.status_code}: {r.text[:150]}")
+    out = []
+    for s in r.json():
+        if s.get("reblog"):
+            continue
+        text = re.sub(r"<[^>]+>", " ", s.get("content", ""))
+        text = re.sub(r"\s+", " ", html.unescape(text)).strip()
+        if text:
+            out.append(text)
+    return out
+
+
 # ---------- X ----------
 def fetch_x(query):
     n = max(10, min(X_MAX_POSTS, 100))
@@ -93,7 +124,12 @@ def fetch_threads(query):
     return [p["text"] for p in r.json().get("data", []) if p.get("text")]
 
 
-# ---------- Пошукові фрази з довільного запиту ----------
+# ---------- Пошукові фрази й хештеги з довільного запиту ----------
+def _fallback_tags(queries):
+    tags = [re.sub(r"\W+", "", q) for q in queries]
+    return [t for t in tags if t][:3]
+
+
 def make_queries(groq, request_text):
     try:
         out = groq(
@@ -101,30 +137,34 @@ def make_queries(groq, request_text):
                 {
                     "role": "system",
                     "content": (
-                        "Перетвори запит користувача на 1-3 короткі пошукові запити для "
-                        "соцмереж (ключові слова, 1-4 слова, без пояснень). Використовуй "
-                        "українську та/або англійську залежно від теми: для міжнародних "
-                        "тем додай англійський варіант. Поверни ТІЛЬКИ JSON-масив рядків, "
-                        'наприклад: ["apple політика", "apple policy"]'
+                        "Перетвори запит користувача на пошукові терміни для соцмереж. "
+                        "Поверни ТІЛЬКИ JSON-об'єкт без пояснень: "
+                        '{"queries": [1-3 короткі пошукові фрази по 1-4 слова], '
+                        '"hashtags": [1-3 хештеги, кожен одним словом без пробілів і без #]}. '
+                        "Використовуй українську та/або англійську залежно від теми: для "
+                        "міжнародних тем додай англійські варіанти. Приклад: "
+                        '{"queries": ["apple політика", "apple policy"], "hashtags": ["apple", "ios"]}'
                     ),
                 },
                 {"role": "user", "content": request_text},
             ],
             temperature=0,
         )
-        m = re.search(r"\[.*\]", out, re.S)
-        arr = json.loads(m.group(0))
-        qs = [str(q).strip() for q in arr if str(q).strip()][:3]
+        data = json.loads(re.search(r"\{.*\}", out, re.S).group(0))
+        qs = [str(q).strip() for q in data.get("queries", []) if str(q).strip()][:3]
+        tags = [re.sub(r"\W+", "", str(h)) for h in data.get("hashtags", [])]
+        tags = [t for t in tags if t][:3]
         if qs:
-            return qs
+            return qs, tags or _fallback_tags(qs)
     except Exception as e:
         print("Query gen error:", e, flush=True)
-    return [request_text[:100]]
+    qs = [request_text[:100]]
+    return qs, _fallback_tags(qs)
 
 
 def collect(groq, request_text):
-    """Повертає (дописи за джерелами, пошукові фрази, примітки про помилки)."""
-    queries = make_queries(groq, request_text)
+    """Повертає (дописи за джерелами, пошукові запити, примітки про помилки)."""
+    queries, tags = make_queries(groq, request_text)
     posts, notes = {}, []
 
     def add(src, items):
@@ -142,6 +182,14 @@ def collect(groq, request_text):
                 print("Bluesky error:", e, flush=True)
                 notes.append("Bluesky зараз недоступний")
                 break
+    if MASTODON_ON:
+        for t in tags:
+            try:
+                add("Mastodon", fetch_mastodon(t))
+            except Exception as e:
+                print("Mastodon error:", e, flush=True)
+                notes.append("Mastodon зараз недоступний")
+                break
     if X_BEARER:  # лише перша фраза, щоб не витрачати гроші
         try:
             add("X", fetch_x(queries[0]))
@@ -156,4 +204,5 @@ def collect(groq, request_text):
             notes.append("Threads недоступний (можливо, немає дозволу на пошук)")
 
     posts = {k: v for k, v in posts.items() if v}
-    return posts, queries, notes
+    shown = queries + ([f"#{t}" for t in tags] if MASTODON_ON else [])
+    return posts, shown, notes
