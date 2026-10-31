@@ -12,6 +12,7 @@ from pypdf import PdfReader
 from docx import Document as DocxDocument
 from youtube_transcript_api import YouTubeTranscriptApi
 import social
+import voice
 
 app = Flask(__name__)
 
@@ -634,6 +635,21 @@ def handle_text(chat_id, text):
         redis("SET", f"mode:{chat_id}", mode, "EX", 900)
         what = "добірку дописів чи коментарів" if mode == "analyze" else "текст для конспекту"
         return f"Надішли {what} наступним повідомленням (текстом, файлом чи скриншотом). Маю 15 хвилин 🙂"
+    if cmd == "/voice":
+        choice = arg.lower()
+        if choice == "auto":
+            redis("DEL", f"voice:{chat_id}")
+            return "Озвучення: auto. Відповідаю голосом, коли ти надсилаєш голосове 🎤"
+        if choice in ("on", "off"):
+            redis("SET", f"voice:{chat_id}", choice)
+            return "Відповідаю голосом на все 🔊" if choice == "on" else "Озвучення вимкнено 🔇"
+        current = redis("GET", f"voice:{chat_id}") or "auto"
+        return (
+            f"Зараз: {current}\n"
+            "/voice on: завжди голосом\n"
+            "/voice off: ніколи\n"
+            "/voice auto: голосом на твої голосові"
+        )
     if cmd == "/trend":
         return handle_trend(arg)
     if cmd == "/compare":
@@ -657,16 +673,50 @@ def handle_text(chat_id, text):
     return ask_ai(chat_id, text)
 
 
+MAX_AUDIO_SEC = int(os.environ.get("MAX_AUDIO_SEC", "600"))
+
+
+def transcribe_message(chat_id, msg):
+    media = msg.get("voice") or msg.get("audio") or msg.get("video_note")
+    if media.get("duration", 0) > MAX_AUDIO_SEC:
+        raise UserError(f"Аудіо задовге (максимум {MAX_AUDIO_SEC // 60} хв).")
+    if "voice" in msg:
+        name = "voice.ogg"
+    elif "video_note" in msg:
+        name = "video.mp4"
+    else:
+        name = media.get("file_name") or "audio.mp3"
+    data = download_tg_file(media["file_id"])
+    text = voice.transcribe(data, name)
+    if not text:
+        raise UserError("Нічого не розчув. Спробуй говорити чіткіше або ближче до мікрофона.")
+    send(chat_id, f"🎤 Розпізнано: «{text[:500]}»")
+    return text
+
+
+def should_speak(chat_id, from_voice):
+    pref = redis("GET", f"voice:{chat_id}")
+    return pref == "on" or (pref != "off" and from_voice)
+
+
 def process_message(msg):
     chat_id = msg["chat"]["id"]
+    from_voice = False
+    speak_ok = False
     try:
         if "photo" in msg:
             data = download_tg_file(msg["photo"][-1]["file_id"])
             answer = handle_image(chat_id, data, "image/jpeg", msg.get("caption", ""))
         elif "document" in msg:
             answer = handle_document(chat_id, msg["document"], msg.get("caption", ""))
+        elif any(k in msg for k in ("voice", "audio", "video_note")):
+            from_voice = True
+            text = transcribe_message(chat_id, msg)
+            answer = handle_text(chat_id, text[:4000])
+            speak_ok = True
         elif "text" in msg:
             answer = handle_text(chat_id, msg["text"][:4000])
+            speak_ok = True
         else:
             return
     except UserError as e:
@@ -680,6 +730,13 @@ def process_message(msg):
         else:
             answer = "Щось пішло не так, спробуй пізніше."
     send(chat_id, answer)
+
+    if speak_ok:
+        try:
+            if should_speak(chat_id, from_voice):
+                voice.send_voice(chat_id, answer)
+        except Exception as e:
+            print("TTS error:", e, flush=True)
 
 
 # ---------- Flask ----------
